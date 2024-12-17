@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/refund" name="refund" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="POST" protocol="http" uri-template="/refund">
+        <inSequence>
+            <filter regex="OPTIONS" source="get-property('HTTP_METHOD')">
+                <then>
+                    <property name="Access-Control-Allow-Origin" scope="transport" type="STRING" value="*"/>
+                    <property name="Access-Control-Allow-Methods" scope="transport" type="STRING" value="GET, POST, OPTIONS"/>
+                    <property name="Access-Control-Allow-Headers" scope="transport" type="STRING" value="Content-Type, Authorization"/>
+                    <respond/>
+                </then>
+                <else/>
+            </filter>
+            <!-- Log the incoming payload -->
+            <log level="full">
+                <property name="INFO" value="Incoming payload"/>
+            </log>
+            <log level="custom">
+                <property name="INFO" value="Extracting Payload"/>
+            </log>
+            <!-- Extract the payload -->
+            <property expression="$body" name="Payload" scope="default" type="STRING"/>
+            <!-- Log the full payload -->
+            <log level="custom">
+                <property expression="json-eval($)" name="ExtractedPayload"/>
+            </log>
+            <!-- Extract specific fields -->
+            <log level="custom">
+                <property expression="json-eval($.id)" name="ID"/>
+                <property expression="json-eval($.amount)" name="Amount"/>
+                <property expression="json-eval($.user_id)" name="UserID"/>
+            </log>
+            <propertyGroup>
+                <property expression="json-eval($.access_code)" name="access_code" scope="default" type="STRING"/>
+                <property expression="json-eval($.merchant_identifier)" name="merchant_identifier" scope="default" type="STRING"/>
+                <property expression="json-eval($.merchant_reference)" name="merchant_reference" scope="default" type="STRING"/>
+                <property expression="json-eval($.amount)" name="amount" scope="default" type="STRING"/>
+                <property expression="json-eval($.currency)" name="currency" scope="default" type="STRING"/>
+                <property expression="json-eval($.language)" name="language" scope="default" type="STRING"/>
+            </propertyGroup>
+            <payloadFactory media-type="json">
+                <format>{&#xd;
+"command":"REFUND",&#xd;
+"access_code":"$1",&#xd;
+"merchant_identifier":"$2",&#xd;
+"merchant_reference":"$3",&#xd;
+"amount":"$4",&#xd;
+"currency":"$5",&#xd;
+"language":"$6"&#xd;
+&#xd;
+&#xd;
+}</format>
+                <args>
+                    <arg evaluator="xml" expression="get-property('access_code')"/>
+                    <arg evaluator="xml" expression="get-property('merchant_identifier')"/>
+                    <arg evaluator="xml" expression="get-property('merchant_reference')"/>
+                    <arg evaluator="xml" expression="get-property('amount')"/>
+                    <arg evaluator="xml" expression="get-property('currency')"/>
+                    <arg evaluator="xml" expression="get-property('language')"/>
+                </args>
+            </payloadFactory>
+            <log level="full"/>
+            <!--   <property name="messageType" scope="axis2" type="STRING" value="application/json"/>
+            <property name="force.json.streaming" scope="axis2" type="BOOLEAN" value="true"/>
+            <property name="Content-Type" scope="transport" type="STRING" value="application/json"/> -->
+            <call>
+                <endpoint>
+                    <http method="post" uri-template="http://127.0.0.1:5118/api/Payment/refundsignature">
+                        <suspendOnFailure>
+                            <initialDuration>-1</initialDuration>
+                            <progressionFactor>-1</progressionFactor>
+                            <maximumDuration>0</maximumDuration>
+                        </suspendOnFailure>
+                        <markForSuspension>
+                            <retriesBeforeSuspension>0</retriesBeforeSuspension>
+                        </markForSuspension>
+                    </http>
+                </endpoint>
+            </call>
+            <!-- Ensure JSON response is processed -->
+            <property name="force.json.streaming" scope="axis2" type="BOOLEAN" value="true"/>
+            <property name="messageType" scope="axis2" type="STRING" value="application/json"/>
+            <!-- Log backend response -->
+            <log level="full">
+                <property expression="get-property('BODY')" name="Backend Response"/>
+            </log>
+            <!-- Extract the signature -->
+            <property expression="json-eval($.signature)" name="signature" scope="default" type="STRING"/>
+            <!-- Log extracted signature -->
+            <log level="custom">
+                <property expression="get-property('signature')" name="Extracted Signature"/>
+            </log>
+            <payloadFactory media-type="json">
+                <format>{&#xd;
+"command":"REFUND",&#xd;
+"access_code":"$1",&#xd;
+"merchant_identifier":"$2",&#xd;
+"merchant_reference":"$3",&#xd;
+"amount":"$4",&#xd;
+"currency":"$5",&#xd;
+"language":"$6",&#xd;
+"signature":"$7"&#xd;
+&#xd;
+&#xd;
+}</format>
+                <args>
+                    <arg evaluator="xml" expression="get-property('access_code')"/>
+                    <arg evaluator="xml" expression="get-property('merchant_identifier')"/>
+                    <arg evaluator="xml" expression="get-property('merchant_reference')"/>
+                    <arg evaluator="xml" expression="get-property('amount')"/>
+                    <arg evaluator="xml" expression="get-property('currency')"/>
+                    <arg evaluator="xml" expression="get-property('language')"/>
+                    <arg evaluator="xml" expression="get-property('signature')"/>
+                </args>
+            </payloadFactory>
+            <property name="messageType" scope="axis2" type="STRING" value="application/json"/>
+            <log level="full"/>
+            <call>
+                <endpoint>
+                    <address uri="https://sbpaymentservices.payfort.com/FortAPI/paymentApi">
+                        <suspendOnFailure>
+                            <initialDuration>-1</initialDuration>
+                            <progressionFactor>-1</progressionFactor>
+                            <maximumDuration>0</maximumDuration>
+                        </suspendOnFailure>
+                        <markForSuspension>
+                            <retriesBeforeSuspension>0</retriesBeforeSuspension>
+                        </markForSuspension>
+                    </address>
+                </endpoint>
+            </call>
+            <log level="full"/>
+            <property expression="json-eval($.response_message)" name="response_message" scope="default" type="STRING"/>
+            <switch source="get-property('response_message')">
+                <case regex="Success">
+                    <property expression="json-eval($.merchant_reference)" name="merchant_reference" scope="default" type="STRING"/>
+                    <log level="custom">
+                        <property expression="get-property('merchant_reference')" name="merchant_reference"/>
+                    </log>
+                    <payloadFactory media-type="json">
+                        <format>{&#xd;
+"merchant_reference":"$1"&#xd;
+&#xd;
+}</format>
+                        <args>
+                            <arg evaluator="xml" expression="get-property('merchant_reference')"/>
+                        </args>
+                    </payloadFactory>
+                    <property name="messageType" scope="axis2" type="STRING" value="application/json"/>
+                    <call>
+                        <endpoint>
+                            <http method="post" uri-template="http://127.0.0.1:5118/api/User/UpdateRefundStatus">
+                                <suspendOnFailure>
+                                    <initialDuration>-1</initialDuration>
+                                    <progressionFactor>-1</progressionFactor>
+                                    <maximumDuration>0</maximumDuration>
+                                </suspendOnFailure>
+                                <markForSuspension>
+                                    <retriesBeforeSuspension>0</retriesBeforeSuspension>
+                                </markForSuspension>
+                            </http>
+                        </endpoint>
+                    </call>
+                    <log level="full"/>
+                    <log level="full">
+                        <property name="messageType" value="application/json"/>
+                        <property name="Redirection" value="Redirecting to Freshcart"/>
+                    </log>
+                    <property name="Access-Control-Allow-Origin" scope="transport" type="STRING" value="*"/>
+                    <property name="Access-Control-Allow-Methods" scope="transport" type="STRING" value="GET, POST, OPTIONS"/>
+                    <property name="Access-Control-Allow-Headers" scope="transport" type="STRING" value="Content-Type, Authorization"/>
+                    <property name="HTTP_SC" scope="axis2" type="STRING" value="302"/>
+                    <property name="Location" scope="transport" type="STRING" value="http://127.0.0.1:5500/success/refund.html"/>
+                    <respond/>
+                </case>
+                <default>
+                    <log level="custom">
+                        <property name="notcompleted" value="default"/>
+                    </log>
+                    <log level="full">
+                        <property name="messageType" value="application/json"/>
+                        <property name="Redirection" value="Redirecting to Freshcart"/>
+                    </log>
+                    <property name="Access-Control-Allow-Origin" scope="transport" type="STRING" value="*"/>
+                    <property name="Access-Control-Allow-Methods" scope="transport" type="STRING" value="GET, POST, OPTIONS"/>
+                    <property name="Access-Control-Allow-Headers" scope="transport" type="STRING" value="Content-Type, Authorization"/>
+                    <property name="HTTP_SC" scope="axis2" type="STRING" value="302"/>
+                    <property name="Location" scope="transport" type="STRING" value="http://127.0.0.1:5500/success/refund.html"/>
+                    <respond/>
+                </default>
+            </switch>
+        </inSequence>
+        <outSequence/>
+        <faultSequence>
+            <log level="full">
+                <property name="ERROR" value="An error occurred while processing the refund request"/>
+            </log>
+        </faultSequence>
+    </resource>
+</api>
